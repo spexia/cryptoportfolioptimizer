@@ -1,9 +1,11 @@
-import csv
+import csv,time,config,datetime
 from binance.client import Client
-import time
-import config
+import pandas as pd
+from functools import reduce
 
 client = Client(config.apiKey, config.secretKey)
+start_time = config.start_time
+end_time = config.end_time
 
 def write(symbol, candlesticks):
     csvFileW = open(symbol + "_historical_data.csv", "w", newline="")
@@ -14,24 +16,36 @@ def write(symbol, candlesticks):
 
     csvFileW.close()
 
-def get_historical_data():
-    symbols = input("Please enter symbols (BTC,ETH): ").split(' ')
-    startdate = input("Please enter start date (November 3, 2023): ")
-    enddate = input("Please enter end date (November 5, 2023): ")
-    candletime = input("Please enter time interval (1): ")
+def get_historical_data(ticker):
 
-    time.sleep(2)
+    print("FETCHING DATA FOR: ", ticker)
 
-    print(f"Selected symbols are: {symbols}\nstartdate: {startdate}, enddate: {enddate}\ntime interval: {candletime} MINUTE")
+    candlesticks = client.get_historical_klines(ticker, Client.KLINE_INTERVAL_1MINUTE, start_time, end_time)
+    write(ticker, candlesticks)
+    print("Data written for: ", ticker)
 
-    time.sleep(1)
-    
-    for symbol in symbols:
-        print("FETCHING DATA FOR: ", symbol)
-        symbol_with_usdt = symbol + "USDT"
+    csv_filename = f"{ticker}_historical_data.csv"
+    attributes = ["timestamp", "open", "high", "low", "close", "volume", "1", "2", "3", "4", "5", "6"]
+    df = pd.read_csv(csv_filename, names=attributes)
 
-        kline_interval = getattr(Client, f"KLINE_INTERVAL_{candletime}MINUTE")
+    converted_df = df[["timestamp","close"]]
 
-        candlesticks = client.get_historical_klines(symbol_with_usdt, kline_interval, startdate, enddate)
-        write(symbol, candlesticks)
-        print("Data written for: ", symbol)
+    for timestamp in converted_df["timestamp"]:
+        converted_df["timestamp"] = df["timestamp"].apply(lambda x: datetime.datetime.fromtimestamp(x/1000.0))
+        
+    converted_df.rename(columns = {'timestamp': 'date'},inplace = True)
+    converted_df.rename(columns = {'close': f'{ticker}'},inplace = True)
+
+    return converted_df
+
+def combine_stocks(tickers):
+    data_frames = []
+
+    for i in tickers:
+        print(i)
+        data_frames.append(get_historical_data(i))
+
+    df_merged = reduce(lambda left,right: pd.merge(left, right,on=['date'],how = 'outer'),data_frames)
+    print(df_merged)
+
+    return df_merged
