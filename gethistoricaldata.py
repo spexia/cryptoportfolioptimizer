@@ -1,51 +1,53 @@
-import csv,time,config,datetime
-from binance.client import Client
+from gethistoricaldata import get_historical_data,combine_stocks
+from opt import risk_return
+from opt import gradient
+from opt import scatter
+import time,config
 import pandas as pd
-from functools import reduce
+import matplotlib.pyplot as plt
 
-client = Client(config.apiKey, config.secretKey)
-start_time = config.start_time
-end_time = config.end_time
 
-def write(symbol, candlesticks):
-    csvFileW = open(symbol + "_historical_data.csv", "w", newline="")
-    klines_writer = csv.writer(csvFileW, delimiter=",")
+print("==================================================")
+print("==================================================")
+print("Ｃｒｙｐｔｏ Ｐｏｒｔｆｏｌｉｏ Ｏｐｔｉｍｉｚｅｒ")
+print("==================================================")
+print("==================================================")
 
-    for candlestick in candlesticks:
-        klines_writer.writerow(candlestick)
+time.sleep(1)
 
-    csvFileW.close()
+symbollist = ['ETHUSDT','BTCUSDT','XRPUSDT','BCHUSDT','DOGEUSDT','SOLUSDT']
 
-def get_historical_data(ticker):
+portfolio = combine_stocks(symbollist)
+portfolio.to_csv("portfolio.csv", index=False)
+portfolio = pd.read_csv("portfolio.csv")
 
-    print("FETCHING DATA FOR: ", ticker)
+results = pd.DataFrame(index=symbollist, columns=['X','Y'])
 
-    candlesticks = client.get_historical_klines(ticker, Client.KLINE_INTERVAL_1MINUTE, start_time, end_time)
-    write(ticker, candlesticks)
-    print("Data written for: ", ticker)
+for symbol in symbollist:
+    X, Y = risk_return(portfolio[symbol])
+    results.loc[symbol] = [X,Y] 
+    results.loc[symbol] = [X,Y] 
 
-    csv_filename = f"{ticker}_historical_data.csv"
-    attributes = ["timestamp", "open", "high", "low", "close", "volume", "1", "2", "3", "4", "5", "6"]
-    df = pd.read_csv(csv_filename, names=attributes)
+results['Color'] = results['Y'].apply(lambda val: gradient(val, results['Y'].min(), results['Y'].max()))
 
-    converted_df = df[["timestamp","close"]]
+plt.figure(figsize=(10, 6))
+for symbol, row in results.iterrows():
+    scatter(row['X'], row['Y'], row['Color'], bar_scale=150, symbol = (f"INDEX:{symbol}"))
 
-    for timestamp in converted_df["timestamp"]:
-        converted_df["timestamp"] = df["timestamp"].apply(lambda x: datetime.datetime.fromtimestamp(x/1000.0))
-        
-    converted_df.rename(columns = {'timestamp': 'date'},inplace = True)
-    converted_df.rename(columns = {'close': f'{ticker}'},inplace = True)
+results['Weight'] = (results['Y'] / results['Y'].sum()) * 100
 
-    return converted_df
 
-def combine_stocks(tickers):
-    data_frames = []
+initial_investment = 100
 
-    for i in tickers:
-        print(i)
-        data_frames.append(get_historical_data(i))
 
-    df_merged = reduce(lambda left,right: pd.merge(left, right,on=['date'],how = 'outer'),data_frames)
-    print(df_merged)
+print("Symbol\t\t\tWeight)")
+print("----------------------------------------")
+for symbol, row in results.iterrows():
+    print(f"{(f'INDEX:{symbol}')}\t\t{row['Weight']:.4f}\t\t")
 
-    return df_merged
+
+plt.xlabel("Risk (Standard Deviation)")
+plt.ylabel("Return (Mean Daily Returns)")
+plt.title("Modern Portfolio Theory")
+plt.legend()
+plt.show()
