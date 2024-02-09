@@ -1,9 +1,10 @@
 from gethistoricaldata import get_historical_data,combine_stocks
+from opt import risk_return
+from opt import gradient
+from opt import scatter
 import time,config
-from pypfopt.expected_returns import mean_historical_return
-from pypfopt.risk_models import CovarianceShrinkage
-
-import PyPortfolioOpt
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 print("==================================================")
@@ -20,8 +21,33 @@ portfolio = combine_stocks(symbollist)
 portfolio.to_csv("portfolio.csv", index=False)
 portfolio = pd.read_csv("portfolio.csv")
 
+results = pd.DataFrame(index=symbollist, columns=['X','Y'])
 
-print(portfolio)
+for symbol in symbollist:
+    X, Y = risk_return(portfolio[symbol])
+    results.loc[symbol] = [X,Y] 
+    results.loc[symbol] = [X,Y] 
 
-mu = mean_historical_return(portfolio)
-S = CovarianceShrinkage(portfolio).ledoit_wolf()
+results['Color'] = results['Y'].apply(lambda val: gradient(val, results['Y'].min(), results['Y'].max()))
+
+plt.figure(figsize=(10, 6))
+for symbol, row in results.iterrows():
+    scatter(row['X'], row['Y'], row['Color'], bar_scale=150, symbol = (f"INDEX:{symbol}"))
+
+results['Weight'] = (results['Y'] / results['Y'].sum()) * 100
+
+
+initial_investment = 100
+
+
+print("Symbol\t\t\tWeight)")
+print("----------------------------------------")
+for symbol, row in results.iterrows():
+    print(f"{(f'INDEX:{symbol}')}\t\t{row['Weight']:.4f}\t\t")
+
+
+plt.xlabel("Risk (Standard Deviation)")
+plt.ylabel("Return (Mean Daily Returns)")
+plt.title("Modern Portfolio Theory")
+plt.legend()
+plt.show()
